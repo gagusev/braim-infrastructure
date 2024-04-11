@@ -1,0 +1,29 @@
+version: '3.7'
+
+networks:
+  internal:
+
+services:
+
+  nginx:
+    image: nginx
+    volumes:
+      - ./containers/nginx/nginx.conf:/etc/nginx/nginx.conf
+    networks: 
+      - default
+      - internal
+    ports:
+      - "80:80"
+      - "443:443"
+
+  flask_app:
+    build: ./containers/flask
+    expose:
+      - 5000
+    command: gunicorn --bind 0.0.0.0:5000 wsgi:app
+    deploy:
+      replicas: 3
+    networks:
+      internal:
+        aliases:
+          - flask
