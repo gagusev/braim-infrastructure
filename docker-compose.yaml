@@ -20,13 +20,19 @@ services:
           openssl req -new -key ca.key -out ca.csr -config ca_req.conf &&
           openssl req -text -noout -in ca.csr &&
           mkdir certs db && touch db/index && openssl rand -hex 16 > serial &&
-          yes | openssl ca -selfsign -in ca.csr -out ca.crt -config ca.conf &&
-          cp ca.crt /openssl-certs'
+          yes | openssl ca -selfsign -in ca.csr -out ca.crt -config ca.conf && 
+          cp ca.crt /openssl-certs &&
+          openssl req -new -keyout webserver.key -out webserver.csr -nodes -config webserver_req.conf &&
+          openssl req -text -noout -in webserver.csr &&
+          yes | openssl ca -in webserver.csr -out webserver.crt -config ca.conf &&
+          cp webserver.crt /openssl-certs'
     configs:
       - source: ca-req
         target: /pki/ca_req.conf
       - source: ca
         target: /pki/ca.conf
+      - source: web-req
+        target: /pki/webserver_req.conf
     volumes:
       - certs:/openssl-certs:Z
 
@@ -113,3 +119,35 @@ configs:
 
       [ v3_ext ]
       authorityKeyIdentifier = keyid,issuer
+  web-req:
+    content: |
+      [ req ]
+      default_bits = ${web_rsa_size}
+      encrypt_key = no
+      default_md = sha256
+      prompt = no
+      utf8 = yes
+
+      distinguished_name = webserver_dn
+      req_extensions = webserver_ext
+
+      [ webserver_dn ]
+      C = ${countryName}
+      ST = ${stateName}
+      L = ${localityName}
+      O = ${organizationName}
+      OU = ${organizationalUnitName}
+      CN = ${wildcard}
+
+      [ webserver_ext ]
+      basicConstraints = critical,CA:false
+      extendedKeyUsage = clientAuth, serverAuth
+      keyUsage = digitalSignature,nonRepudiation,keyEncipherment,dataEncipherment
+      subjectKeyIdentifier = hash
+      subjectAltName = @alt_names
+
+      [alt_names]
+      DNS.1 = ${wildcard}
+      DNS.2 = localhost
+      DNS.3 = ${addip}
+      DNS.4 = ${subdomain}
