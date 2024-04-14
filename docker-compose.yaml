@@ -5,25 +5,111 @@ networks:
 
 services:
 
-  nginx:
-    image: nginx
+  init-dhparams:
+    build: ./containers/cert-manager
+    restart: 'no'
+    command: -c 'openssl dhparam -out dhparams.pem ${dhparams_size}'
     volumes:
-      - ./containers/nginx/nginx.conf:/etc/nginx/nginx.conf
-    networks: 
-      - default
-      - internal
-    ports:
-      - "80:80"
-      - "443:443"
+      - certs:/openssl-certs:Z
 
-  flask_app:
-    build: ./containers/flask
-    expose:
-      - 5000
-    command: gunicorn --bind 0.0.0.0:5000 wsgi:app
-    deploy:
-      replicas: 3
-    networks:
-      internal:
-        aliases:
-          - flask
+  certs-oneshot:
+    build: ./containers/cert-manager
+    restart: 'no'
+    command: >
+      -c 'cd /pki && openssl genrsa -out ca.key ${rsa_key_size} &&
+          openssl req -new -key ca.key -out ca.csr -config ca_req.conf &&
+          openssl req -text -noout -in ca.csr &&
+          mkdir certs db && touch db/index && openssl rand -hex 16 > serial &&
+          yes | openssl ca -selfsign -in ca.csr -out ca.crt -config ca.conf &&
+          cp ca.crt /openssl-certs'
+    configs:
+      - source: ca-req
+        target: /pki/ca_req.conf
+      - source: ca
+        target: /pki/ca.conf
+    volumes:
+      - certs:/openssl-certs:Z
+
+  # nginx:
+  #   image: nginx
+  #   volumes:
+  #     - ./containers/nginx/nginx.conf:/etc/nginx/nginx.conf
+  #   networks: 
+  #     - default
+  #     - internal
+  #   ports:
+  #     - 80:80
+
+  # flask_app:
+  #   build: ./containers/flask
+  #   expose:
+  #     - 5000
+  #   command: gunicorn --bind 0.0.0.0:5000 wsgi:app
+  #   deploy:
+  #     replicas: 3
+  #   networks:
+  #     internal:
+  #       aliases:
+  #         - flask
+
+volumes:
+  certs:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: './containers/cert-manager/certs'
+
+configs:
+  ca-req:
+    content: |
+      [ req ]
+      default_bits = ${rsa_key_size}
+      encrypt_key = no
+      default_md = sha256
+      prompt = no
+      utf8 = yes
+
+      distinguished_name = ca_distinguished_name
+      req_extensions = ca_extensions
+
+      [ ca_distinguished_name ]
+      C = ${countryName}
+      ST = ${stateName}
+      L = ${localityName}
+      O = ${organizationName}
+      OU = ${organizationalUnitName}
+      CN = ${commonName}
+
+      [ ca_extensions ]
+      basicConstraints = critical,CA:TRUE
+      keyUsage = critical,keyCertSign,cRLSign
+      subjectKeyIdentifier = hash
+  ca:
+    content: |
+      [ ca ]
+      default_ca = container_ca
+
+      [ container_ca ]
+      home = /pki
+      serial = /pki/serial
+      new_certs_dir = /pki/certs
+      database = /pki/db/index
+      certificate = /pki/ca.crt
+      private_key = /pki/ca.key
+      default_md = sha256
+      default_days = ${requested_days}
+      policy = ca_policy
+      copy_extensions = copyall
+      x509_extensions = v3_ext
+
+      [ ca_policy ]
+      countryName = match
+      stateOrProvinceName = supplied
+      organizationName = supplied
+      commonName = supplied
+      organizationalUnitName = optional
+      commonName = supplied
+
+      [ v3_ext ]
+      authorityKeyIdentifier = keyid,issuer
