@@ -60,7 +60,7 @@ localhost
 
 На ваш выбор!)
 
-![screenshot](docs/images/screenshot7.png)
+![screenshot](test.jpeg)
 
 ## Завершение работы
 
