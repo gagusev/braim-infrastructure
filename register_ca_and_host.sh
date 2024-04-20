@@ -7,7 +7,8 @@ if [ ! -f '/etc/debian_version' ]; then
 fi
 
 if [ -f './containers/cert-manager/certs/ca.crt' ]; then
-    trust anchor ./containers/cert-manager/certs/ca.crt
+    cp ./containers/cert-manager/certs/ca.crt /usr/local/share/ca-certificates/xsoft.crt
+    update-ca-certificates
     echo 'Self-signed CA-certificate added into the trust store.'
 else
     echo 'Error: seems like CA-certificate is not yet generated.'
